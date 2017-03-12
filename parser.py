@@ -6,9 +6,23 @@ Symbol = namedtuple("Symbol", ["token", "is_terminal"])
 # expansion = [Symbol]
 Rule = namedtuple("Rule", ['symbol', 'expansion'])
 
-# rules = [Symbol]
-# start = Symbol
-Grammar = namedtuple("Grammar", ['rules', 'start'])
+
+class Grammar(object):
+    def __init__(self, rules, start):
+        self.rules = rules
+        self.start = start
+        self.nullable = set()
+
+        while True:
+            changed = False
+            for rule in self.rules:
+                if rule.symbol in self.nullable:
+                    continue
+                if all(symbol in self.nullable for symbol in rule.expansion):
+                    self.nullable.add(rule.symbol)
+                    changed = True
+            if not changed:
+                break
 
 
 class Item(object):
@@ -90,6 +104,10 @@ class Parser(object):
                             # print("  Predicted:", rule.symbol.token, "->",
                                 # [s.token for s in rule.expansion])
                             self.add_item(state, Item(rule, idx))
+                        # Completion for nullable symbols
+                        if symbol in self.grammar.nullable:
+                            self.add_item(state, Item(
+                                item.rule, item.start, item.position + 1))
 
         # print("=" * 10)
         print("Finished parsing")
