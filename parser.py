@@ -11,10 +11,6 @@ Rule = namedtuple("Rule", ['symbol', 'expansion'])
 Grammar = namedtuple("Grammar", ['rules', 'start'])
 
 
-def match(symbol, token):
-    return symbol == token
-
-
 class Item(object):
     def __init__(self, rule, start, position=0):
         self.rule = rule
@@ -40,10 +36,10 @@ class Item(object):
         s = ""
         s += self.rule.symbol.token + " ->"
         for symbol in self.rule.expansion[:self.position]:
-            s += " " + symbol.token
+            s += " %s" % symbol.token
         s += " •"
         for symbol in self.rule.expansion[self.position:]:
-            s += " " + symbol.token
+            s += " %s" % symbol.token
         s += " (%d)" % self.start
         return s
 
@@ -61,21 +57,21 @@ class Parser(object):
                 self.states[0].append(Item(rule, 0))
 
         for idx, state in enumerate(self.states):
-            print("=" * 10)
+            # print("=" * 10)
             if idx < len(input):
                 token = input[idx]
             else:
                 token = None
-            print("Parsing", token)
-            print("=" * 10)
+            # print("Parsing", token)
+            # print("=" * 10)
             for item in state:
-                print(item)
+                # print(item)
                 # Completion
                 if item.position == len(item.rule.expansion):
-                    print("  Completions:",)
+                    # print("  Completions:",)
                     for completing_item in self.get_advancing_items(
                             item.rule.symbol, self.states[item.start]):
-                        print("   ", completing_item)
+                        # print("   ", completing_item)
                         state.append(Item(
                             completing_item.rule,
                             completing_item.start,
@@ -84,18 +80,18 @@ class Parser(object):
                     symbol = item.rule.expansion[item.position]
                     # Scan
                     if symbol.is_terminal:
-                        if match(symbol, token):
-                            print("  Scanned successfully", token)
+                        if symbol.token.match(token):
+                            # print("  Scanned successfully", token)
                             self.add_item(self.states[idx + 1],
                                 Item(item.rule, item.start, item.position + 1))
                     else:
                         # Prediction
                         for rule in self.get_predictions(symbol):
-                            print("  Predicted:", rule.symbol.token, "->",
-                                [s.token for s in rule.expansion])
+                            # print("  Predicted:", rule.symbol.token, "->",
+                                # [s.token for s in rule.expansion])
                             self.add_item(state, Item(rule, idx))
 
-        print("=" * 10)
+        # print("=" * 10)
         print("Finished parsing")
         for item in self.states[-1]:
             if item.is_full_parse(self.grammar):
@@ -137,17 +133,35 @@ class Parser(object):
         return "\n".join(s)
 
 
+class Token(object):
+    def __init__(self, range):
+        self.range = set(range)
+
+    def match(self, symbol):
+        return symbol in self.range
+
+    def __str__(self):
+        if len(self.range) > 2:
+            return "%s-%s" % (min(self.range), max(self.range))
+        return "".join(self.range)
+
+    def __repr__(self):
+        return repr(str(self))
+
+
 def test():
     Sum = Symbol("Sum", False)
     Product = Symbol("Product", False)
     Factor = Symbol("Factor", False)
     Number = Symbol("Number", False)
-    # TODO: tokenization
-    one = Symbol("1", True)
-    plus = Symbol("+", True)
-    star = Symbol("*", True)
-    lparen = Symbol("(", True)
-    rparen = Symbol(")", True)
+    Identifier = Symbol("Identifier", False)
+
+    letter = Symbol(Token("abcdefghijklmnopqrstuvwxyz"), True)
+    digit = Symbol(Token("0123456789"), True)
+    plus = Symbol(Token("+-"), True)
+    star = Symbol(Token("*/"), True)
+    lparen = Symbol(Token("("), True)
+    rparen = Symbol(Token(")"), True)
 
     grammar = Grammar(
         rules=[
@@ -157,16 +171,15 @@ def test():
             Rule(Product, [Factor]),
             Rule(Factor, [lparen, Sum, rparen]),
             Rule(Factor, [Number]),
-            Rule(Number, [one, Number]),
-            Rule(Number, [one]),
+            Rule(Factor, [Identifier]),
+            Rule(Number, [digit, Number]),
+            Rule(Number, [digit]),
+            Rule(Identifier, [letter, Identifier]),
+            Rule(Identifier, [letter]),
         ],
         start=Sum)
-    input = [one, plus, one, star, lparen, one, rparen]
-    # input = [one, plus, lparen, one, star, one, plus, one, rparen]
-    # input = [one, plus, lparen, one, rparen]
-    # input = [lparen, one, rparen]
-    # input = [one, plus, one]
-    # input = [one]
+
+    input = "1+(23*31-foo/(bar-10))+" * 1000 + "1"
     parser = Parser(grammar)
     parser.parse(input)
     # print(parser)
