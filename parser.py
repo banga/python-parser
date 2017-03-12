@@ -93,11 +93,13 @@ class Parser(object):
 
         # print("=" * 10)
         print("Finished parsing")
+        is_fully_parsed = False
         for item in self.states[-1]:
             if item.is_full_parse(self.grammar):
                 print("Fully parsed:", item)
-                break
-        else:
+                is_fully_parsed = True
+
+        if not is_fully_parsed:
             for state in self.states[::-1]:
                 for item in state:
                     if item.is_full_parse(self.grammar):
