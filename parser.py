@@ -72,7 +72,7 @@ class Parser(object):
                     for completing_item in self.get_advancing_items(
                             item.rule.symbol, self.states[item.start]):
                         # print("   ", completing_item)
-                        state.append(Item(
+                        self.add_item(state, Item(
                             completing_item.rule,
                             completing_item.start,
                             completing_item.position + 1))
