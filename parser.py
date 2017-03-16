@@ -61,6 +61,12 @@ class Item(object):
             self.start == other.start and
             self.position == other.position)
 
+    def __hash__(self):
+        h = hash(self.rule.symbol) ^ hash(self.start) ^ hash(self.position)
+        for s in self.rule.expansion:
+            h ^= hash(s)
+        return h
+
     def is_partial_parse(self):
         return self.position == len(self.rule.expansion) and self.start == 0
 
@@ -86,6 +92,8 @@ class Item(object):
 class Parser(object):
     def __init__(self, grammar):
         self.grammar = grammar
+        self.predictions = {}
+        self.advancing_items = {}
 
     def parse(self, input, start_symbol=None):
         if start_symbol is None:
@@ -105,6 +113,8 @@ class Parser(object):
                 token = None
             log("Parsing", token)
             log("=" * 10)
+            seen = set()
+            seen_next = set()
             for item in state:
                 # log(item)
                 # Completion
@@ -112,9 +122,9 @@ class Parser(object):
                     # log(item)
                     # log("  Completions:",)
                     for completing_item in self.get_advancing_items(
-                            item.rule.symbol, self.states[item.start]):
+                            item.rule.symbol, item.start):
                         # log("   ", completing_item)
-                        self.add_item(state, Item(
+                        self.add_item(state, seen, Item(
                             completing_item.rule,
                             completing_item.start,
                             completing_item.position + 1))
@@ -125,17 +135,17 @@ class Parser(object):
                         if token is not None and symbol.token.match(token):
                             log(item)
                             log("  Scanned successfully", token)
-                            self.add_item(self.states[idx + 1],
+                            self.add_item(self.states[idx + 1], seen_next,
                                 Item(item.rule, item.start, item.position + 1))
                     else:
                         # Prediction
                         for rule in self.get_predictions(symbol):
                             # log("  Predicted:", rule.symbol.token, "->",
                             #     [s.token for s in rule.expansion])
-                            self.add_item(state, Item(rule, idx))
+                            self.add_item(state, seen, Item(rule, idx))
                         # Completion for nullable symbols
                         if symbol in self.grammar.nullable:
-                            self.add_item(state, Item(
+                            self.add_item(state, seen, Item(
                                 item.rule, item.start, item.position + 1))
 
         # log("=" * 10)
@@ -153,24 +163,33 @@ class Parser(object):
                     if item.is_full_parse(start_symbol):
                         print("Partial parse:", item)
 
-    def get_advancing_items(self, symbol, state):
+    def get_advancing_items(self, symbol, idx):
         """Find any items in state that can match symbol"""
-        for item in state:
-            if item.can_match(symbol):
-                yield item
+        key = (idx, symbol)
+        if key not in self.advancing_items:
+            state = self.states[idx]
+            items = []
+            for item in state:
+                if item.can_match(symbol):
+                    items.append(item)
+            self.advancing_items[key] = items
+        return self.advancing_items[key]
 
     def get_predictions(self, symbol):
         """Get all rules that expand symbol"""
-        for rule in self.grammar.rules:
-            if rule.symbol == symbol:
-                yield rule
+        if symbol not in self.predictions:
+            predictions = []
+            for rule in self.grammar.rules:
+                if rule.symbol == symbol:
+                    predictions.append(rule)
+            self.predictions[symbol] = predictions
+        return self.predictions[symbol]
 
-    def add_item(self, state, new_item):
+    def add_item(self, state, seen, new_item):
         # TODO: use sets for states
-        for item in state:
-            if item == new_item:
-                return
-        state.append(new_item)
+        if new_item not in seen:
+            state.append(new_item)
+            seen.add(new_item)
 
     def __str__(self):
         s = []
