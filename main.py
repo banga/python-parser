@@ -1,6 +1,7 @@
 from io import BytesIO
 from parser import Parser, Symbol
 from grammar_parser import GrammarParser
+import sys
 import tokenize
 
 
@@ -34,7 +35,7 @@ def main():
     grammar = gp.parse(grammar)
     parser = Parser(grammar)
 
-    file = open("main.py", "rb")
+    file = open(sys.argv[1], "rb")
     tokens = []
     for token in tokenize.tokenize(file.readline):
         if token.type in (tokenize.ENCODING, tokenize.COMMENT, tokenize.NL):
