@@ -1,18 +1,43 @@
 from collections import namedtuple
 
-# token = string
+# token = string or Token
 Symbol = namedtuple("Symbol", ["token", "is_terminal"])
 
 # expansion = [Symbol]
 Rule = namedtuple("Rule", ['symbol', 'expansion'])
 
 
+def log(*args):
+    # print(*args)
+    pass
+
+
 class Grammar(object):
     def __init__(self, rules, start):
+        self.validate(rules)
         self.rules = rules
         self.start = start
         self.nullable = set()
+        self._find_nullables()
 
+    def validate(self, rules):
+        non_terminals = set()
+        for rule in rules:
+            assert isinstance(rule, Rule)
+            assert isinstance(rule.symbol, Symbol)
+            for symbol in rule.expansion:
+                assert isinstance(symbol, Symbol)
+                if not symbol.is_terminal:
+                    non_terminals.add(symbol)
+
+        missing_expansions = [
+            symbol for symbol in non_terminals
+            if all(rule.symbol != symbol for rule in rules)]
+        assert not missing_expansions, "Missing expansions for: %s" % (
+            ", ".join(s.token for s in missing_expansions)
+        )
+
+    def _find_nullables(self):
         while True:
             changed = False
             for rule in self.rules:
@@ -39,8 +64,8 @@ class Item(object):
     def is_partial_parse(self):
         return self.position == len(self.rule.expansion) and self.start == 0
 
-    def is_full_parse(self, grammar):
-        return self.is_partial_parse() and self.rule.symbol == grammar.start
+    def is_full_parse(self, start):
+        return self.is_partial_parse() and self.rule.symbol == start
 
     def can_match(self, symbol):
         return (self.position < len(self.rule.expansion) and
@@ -62,30 +87,33 @@ class Parser(object):
     def __init__(self, grammar):
         self.grammar = grammar
 
-    def parse(self, input):
+    def parse(self, input, start_symbol=None):
+        if start_symbol is None:
+            start_symbol = self.grammar.start
         self.states = [[] for _ in range(len(input) + 1)]
 
         # Intiialize S(0)
         for rule in self.grammar.rules:
-            if rule.symbol == self.grammar.start:
+            if rule.symbol == start_symbol:
                 self.states[0].append(Item(rule, 0))
 
         for idx, state in enumerate(self.states):
-            # print("=" * 10)
+            log("=" * 10)
             if idx < len(input):
                 token = input[idx]
             else:
                 token = None
-            # print("Parsing", token)
-            # print("=" * 10)
+            log("Parsing", token)
+            log("=" * 10)
             for item in state:
-                # print(item)
+                # log(item)
                 # Completion
                 if item.position == len(item.rule.expansion):
-                    # print("  Completions:",)
+                    # log(item)
+                    # log("  Completions:",)
                     for completing_item in self.get_advancing_items(
                             item.rule.symbol, self.states[item.start]):
-                        # print("   ", completing_item)
+                        # log("   ", completing_item)
                         self.add_item(state, Item(
                             completing_item.rule,
                             completing_item.start,
@@ -94,33 +122,35 @@ class Parser(object):
                     symbol = item.rule.expansion[item.position]
                     # Scan
                     if symbol.is_terminal:
-                        if symbol.token.match(token):
-                            # print("  Scanned successfully", token)
+                        if token is not None and symbol.token.match(token):
+                            log(item)
+                            log("  Scanned successfully", token)
                             self.add_item(self.states[idx + 1],
                                 Item(item.rule, item.start, item.position + 1))
                     else:
                         # Prediction
                         for rule in self.get_predictions(symbol):
-                            # print("  Predicted:", rule.symbol.token, "->",
-                                # [s.token for s in rule.expansion])
+                            # log("  Predicted:", rule.symbol.token, "->",
+                            #     [s.token for s in rule.expansion])
                             self.add_item(state, Item(rule, idx))
                         # Completion for nullable symbols
                         if symbol in self.grammar.nullable:
                             self.add_item(state, Item(
                                 item.rule, item.start, item.position + 1))
 
-        # print("=" * 10)
-        print("Finished parsing")
+        # log("=" * 10)
+        # log("Finished parsing")
         is_fully_parsed = False
         for item in self.states[-1]:
-            if item.is_full_parse(self.grammar):
+            if item.is_full_parse(start_symbol):
                 print("Fully parsed:", item)
                 is_fully_parsed = True
 
         if not is_fully_parsed:
+            print("Partial parse")
             for state in self.states[::-1]:
                 for item in state:
-                    if item.is_full_parse(self.grammar):
+                    if item.is_full_parse(start_symbol):
                         print("Partial parse:", item)
 
     def get_advancing_items(self, symbol, state):
@@ -202,6 +232,4 @@ def test():
     input = "1+(23*31-foo/(bar-10))+" * 1000 + "1"
     parser = Parser(grammar)
     parser.parse(input)
-    # print(parser)
-
-test()
+    # log(parser)
